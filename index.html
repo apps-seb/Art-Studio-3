@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>+Art | Experiencia Inmersiva - Memoria y Paz</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+    <script>
+        if (typeof fflate !== 'undefined') {
+            window.fflate = fflate;
+        }
+    </script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.136.0/examples/js/exporters/USDZExporter.js"></script>
+    
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        forest: '#0F3B2F',
+                        emerald: '#1F4D40',
+                        elegant: '#2E5E50',
+                        champagne: '#C8A97E',
+                        beige: '#EAE5DF',
+                    },
+                    fontFamily: {
+                        serif: ['"Cormorant Garamond"', 'serif'],
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; 
+            background: radial-gradient(circle at center, #1F4D40 0%, #051611 100%);
+            color: #EAE5DF; font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-panel {
+            background: rgba(5, 22, 17, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(200, 169, 126, 0.2);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
+        .modal {
+            position: fixed; inset: 0; z-index: 100;
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none;
+            background: rgba(5, 22, 17, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            transition: opacity 0.4s ease;
+        }
+        .modal.active {
+            opacity: 1; pointer-events: auto;
+        }
+        .modal-content {
+            transform: translateY(30px);
+            transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+        .modal.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #C8A97E; border-radius: 4px; }
+
+        #ARButton {
+            position: absolute !important;
+            top: 1.5rem !important; 
+            right: 1.5rem !important; 
+            bottom: auto !important;
+            left: auto !important;
+            background: rgba(0, 0, 0, 0.6) !important;
+            border: 1px solid rgba(200, 169, 126, 0.5) !important;
+            color: #C8A97E !important;
+            border-radius: 9999px !important;
+            padding: 0.5rem 1.25rem !important;
+            font-family: 'Inter', sans-serif !important;
+            font-size: 10px !important;
+            letter-spacing: 0.2em !important;
+            text-transform: uppercase !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.4s ease !important;
+            z-index: 40 !important;
+            cursor: pointer !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            text-decoration: none !important;
+        }
+        #ARButton:hover {
+            background: #C8A97E !important;
+            color: black !important;
+        }
+        #ARButton.active-3d {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+    </style>
+</head>
+<body class="antialiased selection:bg-champagne selection:text-forest">
+
+    <div id="info-overlay" class="absolute top-6 left-6 right-6 md:top-12 md:left-12 md:w-80 glass-panel rounded-2xl p-6 z-20 pointer-events-none transition-opacity duration-500">
+        <p class="text-champagne text-[10px] tracking-[0.4em] uppercase mb-2">Colección Transiciones</p>
+        <h1 class="font-serif text-3xl md:text-4xl text-beige mb-1 leading-tight">Vigía de la Memoria</h1>
+        <p class="font-sans text-xs text-white/70 mb-4 tracking-widest uppercase">Por: Colectivo Firmantes</p>
+        
+        <div class="border-y border-champagne/20 py-3 mb-3 font-sans text-[11px] text-white/80 space-y-1">
+            <p><strong class="text-champagne font-normal">Técnica:</strong> Pigmentos naturales sobre lienzo recuperado.</p>
+            <p><strong class="text-champagne font-normal">Año:</strong> 2026</p>
+        </div>
+        <p class="font-sans text-[10px] text-white/50 italic leading-relaxed">
+            Una obra vertical que simboliza el crecimiento, la firmeza y un espíritu inquebrantable.
+        </p>
+    </div>
+
+    <div id="canvas-3d-container" class="absolute inset-0 w-full h-full z-10 pointer-events-none cursor-grab active:cursor-grabbing"></div>
+
+    <div id="tutorial-3d" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 z-20 transition-opacity duration-500">
+        <div class="glass-panel p-6 rounded-2xl flex flex-col items-center gap-4 text-center border border-champagne/40">
+            <p class="font-serif text-lg text-champagne mb-1">Controles de Exploración</p>
+            <div class="flex gap-8">
+                <div class="flex flex-col items-center gap-2">
+                    <i class="ph ph-hand-swipe-left text-3xl text-white"></i>
+                    <span class="text-[10px] text-white/80 tracking-widest uppercase">1 Dedo<br>Rotar</span>
+                </div>
+                <div class="flex flex-col items-center gap-2">
+                    <i class="ph ph-arrows-out text-3xl text-white"></i>
+                    <span class="text-[10px] text-white/80 tracking-widest uppercase">2 Dedos<br>Zoom</span>
+                </div>
+            </div>
+            <p class="text-[9px] text-champagne/80 mt-2 tracking-widest uppercase animate-pulse">Toca la pantalla para comenzar</p>
+        </div>
+    </div>
+
+    <button id="btn-close-3d" class="absolute top-6 left-6 z-40 px-5 py-2 rounded-full border border-champagne/50 bg-black/60 text-champagne flex items-center gap-2 hover:bg-champagne hover:text-black transition-all opacity-0 pointer-events-none font-sans text-[10px] tracking-[0.2em] uppercase backdrop-blur-md">
+        <i class="ph ph-x text-sm"></i> Salir de Exploración
+    </button>
+
+    <div id="action-menu" class="absolute bottom-8 left-0 w-full px-6 z-30 flex flex-col items-center gap-3 transition-opacity duration-500">
+        
+        <button id="btn-activate-3d" class="w-full max-w-sm py-4 rounded-xl border border-champagne text-forest bg-champagne hover:bg-white hover:border-white transition-colors font-sans text-xs font-semibold tracking-[0.2em] uppercase flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(200,169,126,0.2)]">
+            <i class="ph ph-cube text-lg"></i> Explorar Obra en 3D
+        </button>
+
+        <div class="flex w-full max-w-sm gap-3">
+            <button onclick="openModal('modal-historia')" class="flex-1 py-3 rounded-xl glass-panel text-white hover:text-champagne transition-colors font-sans text-[10px] tracking-[0.1em] uppercase flex flex-col items-center justify-center gap-1 border border-white/10">
+                <i class="ph ph-book-open-text text-xl text-champagne"></i>
+                La Historia
+            </button>
+            <button onclick="openModal('modal-entrevista')" class="flex-1 py-3 rounded-xl glass-panel text-white hover:text-champagne transition-colors font-sans text-[10px] tracking-[0.1em] uppercase flex flex-col items-center justify-center gap-1 border border-white/10">
+                <i class="ph ph-play-circle text-xl text-champagne"></i>
+                Entrevista
+            </button>
+        </div>
+
+        <a href="https://artstudiocol.com" target="_blank" class="w-full max-w-sm py-3 mt-1 rounded-xl bg-transparent text-white/50 hover:text-champagne transition-colors font-sans text-[10px] tracking-[0.1em] uppercase flex items-center justify-center gap-2">
+            Visitar ArtStudioCol.com <i class="ph ph-arrow-up-right"></i>
+        </a>
+    </div>
+
+    <div id="tutorial-ar" class="hidden absolute bottom-20 left-0 w-full flex justify-center z-50 pointer-events-none">
+        <div class="glass-panel px-6 py-3 rounded-full flex items-center gap-3 border border-champagne/40 shadow-[0_0_20px_rgba(200,169,126,0.3)] animate-bounce">
+            <i class="ph ph-device-mobile-camera text-2xl text-champagne"></i>
+            <span class="text-xs text-white tracking-[0.1em] uppercase font-sans font-medium">Mueve tu teléfono para explorar</span>
+        </div>
+    </div>
+
+    <div id="modal-historia" class="modal">
+        <div class="modal-content relative w-[90%] max-w-lg max-h-[85vh] glass-panel rounded-2xl p-8 flex flex-col border border-champagne/30">
+            <button onclick="closeModal('modal-historia')" class="absolute top-4 right-4 text-white/50 hover:text-champagne transition-colors">
+                <i class="ph ph-x-circle text-3xl"></i>
+            </button>
+            
+            <div class="text-center mb-6 mt-2">
+                <i class="ph ph-tree text-3xl text-champagne mb-2"></i>
+                <h2 class="font-serif text-3xl text-beige">De la Tierra<br><span class="italic text-champagne">al Cielo</span></h2>
+            </div>
+            
+            <div class="overflow-y-auto custom-scroll pr-2 text-white/80 font-sans text-sm font-light leading-relaxed space-y-4">
+                <p>
+                    Esta pieza se erige de forma vertical, marcando una ruptura consciente con los paisajes horizontales del pasado. Creada por un colectivo de firmantes de paz, la orientación misma de la obra es una declaración: representa al individuo poniéndose de pie, creciendo desde las raíces de su historia hacia nuevas alturas.
+                </p>
+                <p>
+                    El lienzo utilizado fue recuperado de dotaciones de antiguos campamentos. Ahora, estirado hacia arriba, sostiene una amalgama de pigmentos naturales extraídos de las montañas del Cauca.
+                </p>
+                <p>
+                    <span class="text-champagne italic">"Cuando decidimos pintar en este formato, entendimos que queríamos reflejar la dignidad de quien se levanta tras la tormenta. No estamos escondidos a ras de suelo; estamos de pie, construyendo."</span>
+                </p>
+                <p>
+                    Las texturas verticales que recorren la pintura emulan las cortezas de los árboles del macizo colombiano, recordando que la verdadera resiliencia no ignora las cicatrices, sino que las convierte en la estructura fuerte que sostiene un futuro en paz.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-entrevista" class="modal">
+        <div class="modal-content relative w-[90%] max-w-2xl max-h-[85vh] overflow-y-auto custom-scroll glass-panel rounded-2xl p-6 flex flex-col border border-champagne/30">
+            <button onclick="closeModal('modal-entrevista')" class="absolute top-4 right-4 text-white/50 hover:text-champagne transition-colors z-10">
+                <i class="ph ph-x-circle text-3xl"></i>
+            </button>
+            
+            <h2 class="font-serif text-2xl text-beige mb-4 text-center mt-2">Voces de <span class="italic text-champagne">Transición</span></h2>
+            
+            <div class="space-y-6">
+                <div>
+                    <h3 class="font-serif text-xl text-champagne mb-2">Proceso en acción</h3>
+                    <a href="https://www.facebook.com/share/r/171G7hzM1n/" target="_blank" rel="noopener noreferrer" class="group block w-full bg-black rounded-lg overflow-hidden border border-champagne/50 shadow-[0_0_15px_rgba(200,169,126,0.3)] mb-2 relative min-h-[550px]">
+                        <img src="https://mercacol.com.co/wp-content/uploads/2026/03/IMG_6382.jpeg" alt="Portada del video" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 group-hover:opacity-100 transition-all duration-700 ease-in-out">
+                        <div class="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors duration-500"></div>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <div class="w-20 h-20 rounded-full bg-champagne/90 text-forest flex items-center justify-center group-hover:scale-110 group-hover:bg-champagne transition-all duration-300 shadow-[0_0_20px_rgba(200,169,126,0.5)] group-hover:shadow-[0_0_30px_rgba(200,169,126,0.8)]">
+                                <i class="ph-fill ph-play text-3xl ml-2"></i>
+                            </div>
+                            <div class="mt-4 flex items-center gap-2 bg-black/60 px-4 py-2 rounded-full backdrop-blur-sm border border-champagne/30 text-champagne opacity-90 group-hover:opacity-100 transition-opacity">
+                                <i class="ph-fill ph-facebook-logo text-xl"></i>
+                                <span class="text-sm font-medium">Ver en Facebook</span>
+                            </div>
+                        </div>
+                    </a>
+                    <p class="text-[11px] text-white/60 tracking-widest uppercase mb-1 font-sans">Parte 1</p>
+                    <p class="text-sm font-light text-white/90 font-sans">Una mirada cercana al proceso de creación y pintado en el estudio.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-serif text-xl text-champagne mb-2">Historia de vida del firmante</h3>
+                    <div class="relative w-full pb-[56.25%] bg-black rounded-lg overflow-hidden border border-white/10 mb-2">
+                        <img src="https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1000&auto=format&fit=crop" alt="Historia de vida" class="absolute inset-0 w-full h-full object-cover opacity-50">
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <button class="w-16 h-16 rounded-full bg-champagne/90 text-forest flex items-center justify-center hover:scale-110 transition-transform cursor-pointer">
+                                <i class="ph-fill ph-play text-2xl ml-1"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-white/60 tracking-widest uppercase mb-1 font-sans">Parte 2</p>
+                    <p class="text-sm font-light text-white/90 font-sans">Conoce el recorrido personal y las vivencias que forjaron este camino hacia la paz.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-serif text-xl text-champagne mb-2">La inspiración vertical</h3>
+                    <div class="relative w-full pb-[56.25%] bg-black rounded-lg overflow-hidden border border-white/10 mb-2">
+                        <img src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?q=80&w=1000&auto=format&fit=crop" alt="Inspiración del cuadro" class="absolute inset-0 w-full h-full object-cover opacity-50">
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <button class="w-16 h-16 rounded-full bg-champagne/90 text-forest flex items-center justify-center hover:scale-110 transition-transform cursor-pointer">
+                                <i class="ph-fill ph-play text-2xl ml-1"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-white/60 tracking-widest uppercase mb-1 font-sans">Parte 3</p>
+                    <p class="text-sm font-light text-white/90 font-sans">El proceso creativo detrás de "Vigía de la Memoria" y la decisión de usar el formato retrato.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. GESTIÓN DE MODALES
+        function openModal(modalId) { document.getElementById(modalId).classList.add('active'); }
+        function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
+
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', function(e) {
+                if(e.target === this) this.classList.remove('active');
+            });
+        });
+
+        // 2. LÓGICA DE EXPLORACIÓN 3D Y REALIDAD AUMENTADA
+        const container3D = document.getElementById('canvas-3d-container');
+        const btnActivate3D = document.getElementById('btn-activate-3d');
+        const btnClose3D = document.getElementById('btn-close-3d');
+        const infoOverlay = document.getElementById('info-overlay');
+        const actionMenu = document.getElementById('action-menu');
+        
+        // Elementos de Tutorial
+        const tutorial3D = document.getElementById('tutorial-3d');
+        const tutorialAR = document.getElementById('tutorial-ar');
+        let tutorial3DDone = false;
+
+        let scene, camera, renderer, controls, painting;
+        let arButtonElement;
+
+        function init3D() {
+            scene = new THREE.Scene();
+            
+            const aspect = window.innerWidth / window.innerHeight;
+            camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+            camera.position.set(0, 0, aspect < 1 ? 14 : 9); 
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setClearColor(0x000000, 0); 
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            
+            renderer.xr.enabled = true;
+            container3D.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; 
+            controls.dampingFactor = 0.05;
+            controls.enableZoom = true; 
+            controls.minDistance = 5;
+            controls.maxDistance = 20;
+            controls.minPolarAngle = Math.PI / 3; 
+            controls.maxPolarAngle = Math.PI / 1.5; 
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 1.5;
+
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.7);
+            scene.add(hemiLight);
+
+            const spotlight = new THREE.SpotLight(0xfff5e6, 1.5);
+            spotlight.position.set(3, 4, 6);
+            spotlight.angle = Math.PI / 4;
+            spotlight.penumbra = 0.4;
+            scene.add(spotlight);
+
+            painting = new THREE.Group();
+            painting.position.y = aspect < 1 ? 1.5 : 0; 
+            scene.add(painting);
+
+            // Detección iOS
+            const isIOS = (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !window.MSStream;
+
+            // Preparación Interfaz AR
+            if (isIOS) {
+                arButtonElement = document.createElement('a');
+                arButtonElement.id = 'ARButton';
+                arButtonElement.innerHTML = '<i class="ph ph-spinner-gap animate-spin text-sm"></i> PREPARANDO AR...';
+                document.body.appendChild(arButtonElement);
+                
+                arButtonElement.addEventListener('click', (e) => {
+                    if (!arButtonElement.getAttribute('href') || arButtonElement.getAttribute('href') === '#') {
+                        e.preventDefault();
+                        alert("El modelo AR se está terminando de procesar. Intenta en un segundo.");
+                    }
+                });
+            } else {
+                // Configuramos domOverlay para Android WebXR para poder mostrar HTML encima
+                arButtonElement = ARButton.createButton(renderer, { 
+                    requiredFeatures: ['hit-test'],
+                    optionalFeatures: ['dom-overlay'],
+                    domOverlay: { root: document.body }
+                });
+                arButtonElement.id = 'ARButton';
+                arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN PARED (AR)';
+                document.body.appendChild(arButtonElement);
+
+                renderer.xr.addEventListener('sessionstart', () => {
+                    painting.userData.originalPos = painting.position.clone();
+                    painting.userData.originalScale = painting.scale.clone();
+                    painting.scale.set(0.1, 0.1, 0.1);
+                    painting.position.set(0, 0, -2); 
+                    
+                    // Ocultar UI de navegación web durante la sesión AR
+                    infoOverlay.style.display = 'none';
+                    actionMenu.style.display = 'none';
+                    btnClose3D.style.display = 'none';
+                    
+                    // Mostrar tutorial AR
+                    tutorialAR.classList.remove('hidden');
+                    
+                    // Ocultar tutorial AR automáticamente después de 5 segundos
+                    setTimeout(() => {
+                        tutorialAR.classList.add('hidden');
+                    }, 5000);
+                });
+
+                renderer.xr.addEventListener('sessionend', () => {
+                    painting.scale.copy(painting.userData.originalScale);
+                    painting.position.copy(painting.userData.originalPos);
+                    
+                    // Restaurar UI
+                    infoOverlay.style.display = '';
+                    actionMenu.style.display = '';
+                    btnClose3D.style.display = '';
+                    tutorialAR.classList.add('hidden');
+                });
+            }
+
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.setCrossOrigin('anonymous');
+            
+            // CAMBIO: Incorporamos la nueva imagen solicitada
+            const imageUrl = 'IMG_6415.jpeg'; 
+
+            textureLoader.load(imageUrl, async function(texture) {
+                texture.encoding = THREE.sRGBEncoding;
+
+                // --- MATERIALES VISTA WEB 3D ---
+                const paintMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xffffff, map: texture, bumpMap: texture,
+                    bumpScale: 0.05, roughness: 0.4, metalness: 0.05 
+                });
+                const sideMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x000000, roughness: 0.85, metalness: 0.1 
+                });
+                
+                // CAMBIO: Transformación a VERTICAL invirtiendo el ancho (5.6) y el alto (8.5)
+                const baseMesh = new THREE.Mesh(new THREE.BoxGeometry(5.6, 8.5, 0.18), sideMaterial);
+                painting.add(baseMesh);
+                
+                const frontMesh = new THREE.Mesh(new THREE.BoxGeometry(5.6, 8.5, 0.01), paintMaterial);
+                frontMesh.position.z = 0.095; 
+                painting.add(frontMesh);
+
+                // --- GENERADOR AR NATIVO PARA IOS ---
+                if (isIOS && arButtonElement) {
+                    try {
+                        const exporter = new THREE.USDZExporter();
+                        const arGroup = new THREE.Group();
+                        
+                        const arTexture = texture.clone();
+                        arTexture.flipY = true;
+                        arTexture.needsUpdate = true;
+
+                        // CAMBIO: Transformación a VERTICAL en el modelo exportable AR
+                        const arCanvasGeom = new THREE.BoxGeometry(0.56, 0.85, 0.005); 
+
+                        const arCanvas = new THREE.Mesh(
+                            arCanvasGeom,
+                            new THREE.MeshStandardMaterial({ 
+                                color: 0xffffff, 
+                                map: arTexture, 
+                                roughness: 0.5 
+                            })
+                        );
+                        arGroup.add(arCanvas);
+
+                        const arraybuffer = await exporter.parse(arGroup);
+                        
+                        const blob = new Blob([arraybuffer], { type: 'model/vnd.usdz+zip' });
+                        const arUrl = URL.createObjectURL(blob);
+                        
+                        arButtonElement.setAttribute('href', arUrl);
+                        arButtonElement.setAttribute('rel', 'ar');
+                        arButtonElement.setAttribute('download', 'obra.usdz');
+                        
+                        const img = document.createElement('img');
+                        img.src = imageUrl;
+                        img.style.display = 'none';
+                        arButtonElement.appendChild(img);
+
+                        arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN PARED (AR)';
+
+                    } catch(e) {
+                        console.error("Detalle del Error AR:", e);
+                        arButtonElement.innerHTML = '<i class="ph ph-warning text-sm"></i> ERROR: VER CONSOLA';
+                    }
+                }
+            }, undefined, function(err) {
+                console.warn("⚠️ ERROR cargando imagen " + imageUrl);
+            });
+
+            window.addEventListener('resize', onWindowResize, false);
+            
+            // Ocultar tutorial 3D web al interactuar por primera vez
+            container3D.addEventListener('pointerdown', () => {
+                if(!tutorial3DDone && tutorial3D.style.opacity > 0) {
+                    tutorial3DDone = true;
+                    gsap.to(tutorial3D, {opacity: 0, duration: 0.3, pointerEvents: 'none'});
+                }
+            });
+
+            animate3D();
+        }
+
+        function onWindowResize() {
+            const aspect = window.innerWidth / window.innerHeight;
+            camera.aspect = aspect;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            if(!renderer.xr.isPresenting) {
+                painting.position.y = aspect < 1 ? 1.5 : 0;
+                camera.position.z = aspect < 1 ? 14 : 9;
+            }
+        }
+
+        function animate3D() {
+            renderer.setAnimationLoop(() => {
+                if(!renderer.xr.isPresenting) {
+                    controls.update(); 
+                }
+                renderer.render(scene, camera);
+            });
+        }
+
+        if (typeof THREE !== 'undefined') {
+            init3D();
+        }
+
+        // --- LÓGICA DE INTERFAZ 3D ---
+        btnActivate3D.addEventListener('click', () => {
+            container3D.classList.remove('pointer-events-none');
+            controls.autoRotate = false;
+            gsap.to(painting.position, { y: 0, duration: 1, ease: 'power2.out' });
+            
+            gsap.to(actionMenu, {opacity: 0, y: 20, pointerEvents: 'none', duration: 0.4});
+            gsap.to(infoOverlay, {opacity: 0, y: -20, duration: 0.4});
+            gsap.to(btnClose3D, {opacity: 1, pointerEvents: 'auto', duration: 0.4, delay: 0.2});
+            
+            // Mostrar tutorial si no se ha completado
+            if(!tutorial3DDone) {
+                gsap.to(tutorial3D, {opacity: 1, duration: 0.5, delay: 0.6});
+            }
+
+            if(arButtonElement) arButtonElement.classList.add('active-3d');
+        });
+
+        btnClose3D.addEventListener('click', () => {
+            container3D.classList.add('pointer-events-none');
+            controls.autoRotate = true; 
+            
+            // Ocultar tutorial web si el usuario sale sin interactuar
+            gsap.to(tutorial3D, {opacity: 0, duration: 0.2});
+            
+            const aspect = window.innerWidth / window.innerHeight;
+            const targetY = aspect < 1 ? 1.5 : 0;
+            const targetZ = aspect < 1 ? 14 : 9;
+
+            gsap.to(painting.position, { y: targetY, duration: 1.5, ease: 'power2.inOut' });
+            gsap.to(camera.position, { x: 0, y: 0, z: targetZ, duration: 1.5, ease: 'power2.inOut' });
+            gsap.to(controls.target, { x: 0, y: 0, z: 0, duration: 1.5, ease: 'power2.inOut' });
+            
+            gsap.to(btnClose3D, {opacity: 0, pointerEvents: 'none', duration: 0.3});
+            gsap.to(actionMenu, {opacity: 1, y: 0, pointerEvents: 'auto', duration: 0.4, delay: 0.3});
+            gsap.to(infoOverlay, {opacity: 1, y: 0, duration: 0.4, delay: 0.3});
+            
+            if(arButtonElement) arButtonElement.classList.remove('active-3d');
+        });
+    </script>
+</body>
+</html>
