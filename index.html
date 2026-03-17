@@ -444,8 +444,24 @@
             controller.addEventListener('select', () => {
                 if (reticle.visible && !isARPlaced) {
                     painting.position.setFromMatrixPosition(reticle.matrix);
-                    painting.quaternion.setFromRotationMatrix(reticle.matrix);
-                    painting.rotateX(Math.PI / 2); 
+                    
+                    // Lógica inteligente de alineación espacial
+                    const reticleQuat = new THREE.Quaternion().setFromRotationMatrix(reticle.matrix);
+                    const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(reticleQuat).normalize();
+                    
+                    if (Math.abs(normal.y) > 0.8) {
+                        // Superficie horizontal (Piso): Colocar de pie y orientar hacia el usuario
+                        painting.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0); 
+                        const cameraPos = new THREE.Vector3();
+                        camera.getWorldPosition(cameraPos);
+                        cameraPos.y = painting.position.y; 
+                        painting.lookAt(cameraPos);
+                    } else {
+                        // Superficie vertical (Pared): Adherir de forma plana
+                        painting.quaternion.copy(reticleQuat);
+                        painting.rotateX(Math.PI / 2);
+                    }
+
                     painting.visible = true;
                     isARPlaced = true;
                     reticle.visible = false;
@@ -481,6 +497,9 @@
                     renderer.xr.setSession(session);
                     xrSession = session;
                     
+                    // FIX: Deshabilitar los controles interfiere con el hit-test en WebXR
+                    controls.enabled = false;
+                    
                     arButtonElement.innerHTML = '<i class="ph ph-x text-sm"></i> SALIR DE AR';
                     
                     painting.userData.originalPos = painting.position.clone();
@@ -505,6 +524,9 @@
                     hitTestSourceRequested = false;
                     hitTestSource = null;
                     reticle.visible = false;
+                    
+                    // FIX: Restaurar controles al salir de WebXR
+                    controls.enabled = true;
                     
                     arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN PARED (AR)';
                     
