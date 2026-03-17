@@ -192,7 +192,7 @@
     <div id="tutorial-ar" class="hidden absolute bottom-20 left-0 w-full flex justify-center z-50 pointer-events-none transition-opacity duration-300">
         <div class="glass-panel px-6 py-3 rounded-full flex items-center gap-3 border border-champagne/40 shadow-[0_0_20px_rgba(200,169,126,0.3)] animate-bounce">
             <i class="ph ph-device-mobile-camera text-2xl text-champagne"></i>
-            <span id="ar-instruction" class="text-xs text-white tracking-[0.1em] uppercase font-sans font-medium">Mueve tu teléfono para escanear</span>
+            <span id="ar-instruction" class="text-xs text-white tracking-[0.1em] uppercase font-sans font-medium">Ubica el cuadro y presiona la pantalla</span>
         </div>
     </div>
 
@@ -201,11 +201,14 @@
             <button onclick="closeModal('modal-historia')" class="absolute top-4 right-4 text-white/50 hover:text-champagne transition-colors">
                 <i class="ph ph-x-circle text-3xl"></i>
             </button>
+            
             <div class="text-center mb-6 mt-2">
                 <i class="ph ph-tree text-3xl text-champagne mb-2"></i>
                 <h2 id="hist-title" class="font-serif text-3xl text-beige">De la Tierra<br><span class="italic text-champagne">al Cielo</span></h2>
             </div>
-            <div id="hist-text" class="overflow-y-auto custom-scroll pr-2 text-white/80 font-sans text-sm font-light leading-relaxed space-y-4"></div>
+            
+            <div id="hist-text" class="overflow-y-auto custom-scroll pr-2 text-white/80 font-sans text-sm font-light leading-relaxed space-y-4">
+                </div>
         </div>
     </div>
 
@@ -214,8 +217,11 @@
             <button onclick="closeModal('modal-entrevista')" class="absolute top-4 right-4 text-white/50 hover:text-champagne transition-colors z-10">
                 <i class="ph ph-x-circle text-3xl"></i>
             </button>
+            
             <h2 class="font-serif text-2xl text-beige mb-4 text-center mt-2">Voces de <span class="italic text-champagne">Transición</span></h2>
-            <div id="interview-content" class="space-y-6"></div>
+            
+            <div id="interview-content" class="space-y-6">
+                </div>
         </div>
     </div>
 
@@ -299,15 +305,12 @@
         const arInstruction = document.getElementById('ar-instruction');
         let tutorial3DDone = false;
 
-        let scene, camera, renderer, controls, painting, paintMaterial, reticle;
+        let scene, camera, renderer, controls, painting, paintMaterial;
         let arButtonElement;
         const textureLoader = new THREE.TextureLoader();
         let isIOS = false;
-        
-        let hitTestSource = null;
-        let hitTestSourceRequested = false;
         let xrSession = null;
-        let isARPlaced = false;
+        let arGroup = null; // Grupo para anclar a la cámara
 
         function init3D() {
             scene = new THREE.Scene();
@@ -319,36 +322,26 @@
             renderer.setClearColor(0x000000, 0); 
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.outputEncoding = THREE.sRGBEncoding; // Espacio de color correcto
             renderer.xr.enabled = true;
             container3D.appendChild(renderer.domElement);
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true; 
             controls.dampingFactor = 0.05;
-            controls.enableZoom = true; 
-            controls.minDistance = 5; 
-            controls.maxDistance = 20;
-            controls.minPolarAngle = Math.PI / 3; 
-            controls.maxPolarAngle = Math.PI / 1.5; 
             controls.autoRotate = true; 
             controls.autoRotateSpeed = 1.5;
 
-            // ILUMINACIÓN ORIGINAL RESTAURADA Y ADAPTADA
             scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.7));
             const spotlight = new THREE.SpotLight(0xfff5e6, 1.5);
             spotlight.position.set(3, 4, 6);
             spotlight.angle = Math.PI / 4;
-            spotlight.penumbra = 0.4;
-            // EL TRUCO: Anclar el spotlight a la cámara para que te siga en AR
-            camera.add(spotlight);
-            scene.add(camera);
+            scene.add(spotlight);
 
             painting = new THREE.Group();
             painting.position.y = aspect < 1 ? 1.5 : 0; 
             scene.add(painting);
 
-            // MATERIALES ORIGINALES RESTAURADOS
             paintMaterial = new THREE.MeshStandardMaterial({ 
                 color: 0xffffff, roughness: 0.4, metalness: 0.05 
             });
@@ -363,59 +356,22 @@
             frontMesh.position.z = 0.095; 
             painting.add(frontMesh);
 
-            // RETÍCULO MEJORADO
-            reticle = new THREE.Group();
-            reticle.matrixAutoUpdate = true; 
-            
-            const ringGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
-            const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xc8a97e, transparent: true, opacity: 0.9 });
-            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-            reticle.add(ring);
+            // [ENFOQUE SENIOR] Grupo de RA para anclaje directo
+            arGroup = new THREE.Group();
+            scene.add(arGroup);
 
-            const gridHelper = new THREE.GridHelper(0.4, 6, 0xffffff, 0xc8a97e);
-            gridHelper.material.transparent = true;
-            gridHelper.material.opacity = 0.6;
-            reticle.add(gridHelper);
-
-            const crossGeo = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(-0.05, 0, 0), new THREE.Vector3(0.05, 0, 0),
-                new THREE.Vector3(0, 0, -0.05), new THREE.Vector3(0, 0, 0.05)
-            ]);
-            const crossMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
-            const cross = new THREE.LineSegments(crossGeo, crossMat);
-            reticle.add(cross);
-
-            reticle.visible = false;
-            scene.add(reticle);
-
-            // SISTEMA DE POSICIONAMIENTO INMOVILIZADO (PISO/PARED)
             const controller = renderer.xr.getController(0);
             controller.addEventListener('select', () => {
-                if (reticle.visible && !isARPlaced) {
-                    // 1. Bloqueo Inmediato: Garantiza que no se siga moviendo
-                    isARPlaced = true;
-                    reticle.visible = false;
+                // [ENFOQUE SENIOR] Lógica para soltar el cuadro en la pared
+                if (xrSession && !painting.userData.placed) {
+                    const sceneCenter = new THREE.Vector3();
+                    painting.getWorldPosition(sceneCenter);
                     
-                    // 2. Extraer posición y evaluar la normal de la superficie
-                    painting.position.copy(reticle.position);
-                    const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(reticle.quaternion).normalize();
+                    scene.attach(painting); // Desanclar de la cámara y pegar a la escena real
+                    painting.userData.placed = true;
                     
-                    if (Math.abs(normal.y) > 0.7) {
-                        // Es PISO: Lo paramos firme y miramos hacia la cámara solo en Y
-                        painting.quaternion.set(0, 0, 0, 1); 
-                        const camPos = new THREE.Vector3();
-                        camera.getWorldPosition(camPos);
-                        camPos.y = painting.position.y;
-                        painting.lookAt(camPos);
-                    } else {
-                        // Es PARED: Respetamos la rotación de la pared y lo recostamos hacia atrás
-                        painting.quaternion.copy(reticle.quaternion);
-                        painting.rotateX(-Math.PI / 2); 
-                    }
-
-                    painting.visible = true;
-                    arInstruction.innerText = "¡Obra fijada con éxito!";
-                    setTimeout(() => { tutorialAR.classList.add('hidden'); }, 3000);
+                    arInstruction.innerText = "Obra posicionada";
+                    setTimeout(() => { tutorialAR.classList.add('hidden'); }, 2000);
                 }
             });
             scene.add(controller);
@@ -436,7 +392,7 @@
             } else {
                 arButtonElement = document.createElement('button');
                 arButtonElement.id = 'ARButton';
-                arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN EL ESPACIO (AR)';
+                arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN PARED (AR)';
                 document.body.appendChild(arButtonElement);
 
                 const onSessionStarted = (session) => {
@@ -445,39 +401,35 @@
                     renderer.xr.setSession(session);
                     xrSession = session;
                     
-                    controls.enabled = false;
                     arButtonElement.innerHTML = '<i class="ph ph-x text-sm"></i> SALIR DE AR';
-                    
-                    painting.userData.originalPos = painting.position.clone();
-                    painting.userData.originalScale = painting.scale.clone();
-                    painting.userData.originalQuat = painting.quaternion.clone();
-                    
-                    painting.scale.set(0.1, 0.1, 0.1);
-                    painting.visible = false;
-                    isARPlaced = false;
                     
                     infoOverlay.style.display = 'none'; 
                     actionMenu.style.display = 'none'; 
                     btnClose3D.style.display = 'none';
                     
                     tutorialAR.classList.remove('hidden');
-                    arInstruction.innerText = "Escanea el piso o una pared";
+                    arInstruction.innerText = "Ubica el cuadro y presiona la pantalla";
+
+                    // [ENFOQUE SENIOR] Lógica de anclaje inicial a la cámara
+                    // Escalar el cuadro para el mundo real (metros) y pegar a arGroup
+                    painting.scale.set(0.1, 0.1, 0.1); 
+                    arGroup.add(painting); 
+                    painting.position.set(0, 0, -1); // Un metro frente a la cámara
+                    painting.rotation.set(0, 0, 0); // Ortogonalidad perfecta por defecto
+                    painting.userData.placed = false;
                 };
 
                 const onSessionEnded = () => {
                     if (xrSession) xrSession.removeEventListener('end', onSessionEnded);
                     xrSession = null;
-                    hitTestSourceRequested = false;
-                    hitTestSource = null;
-                    reticle.visible = false;
                     
-                    controls.enabled = true;
-                    arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN EL ESPACIO (AR)';
+                    arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN PARED (AR)';
                     
-                    painting.scale.copy(painting.userData.originalScale);
-                    painting.position.copy(painting.userData.originalPos);
-                    painting.quaternion.copy(painting.userData.originalQuat);
-                    painting.visible = true;
+                    // Restaurar el cuadro a su estado 3D
+                    scene.add(painting);
+                    painting.scale.set(1, 1, 1);
+                    const aspect = window.innerWidth / window.innerHeight;
+                    painting.position.set(0, aspect < 1 ? 1.5 : 0, 0);
                     
                     infoOverlay.style.display = ''; 
                     actionMenu.style.display = ''; 
@@ -490,16 +442,11 @@
                         if (supported) {
                             arButtonElement.addEventListener('click', async () => {
                                 if (xrSession === null) {
-                                    try {
-                                        const session = await navigator.xr.requestSession('immersive-ar', {
-                                            requiredFeatures: ['local', 'hit-test'],
-                                            optionalFeatures: ['dom-overlay'],
-                                            domOverlay: { root: document.body }
-                                        });
-                                        onSessionStarted(session);
-                                    } catch (e) {
-                                        console.error("Error iniciando sesión AR:", e);
-                                    }
+                                    const session = await navigator.xr.requestSession('immersive-ar', {
+                                        optionalFeatures: ['dom-overlay'],
+                                        domOverlay: { root: document.body }
+                                    });
+                                    onSessionStarted(session);
                                 } else {
                                     xrSession.end();
                                 }
@@ -533,35 +480,27 @@
             }
 
             textureLoader.load(imageUrl, async function(texture) {
+                // [ENFOQUE SENIOR] Configuraciones profesionales para evitar textura gris
                 texture.encoding = THREE.sRGBEncoding;
-                // Forzamos la actualización para prevenir material gris en memoria gráfica
+                texture.minFilter = THREE.LinearMipMapLinearFilter; // Alta calidad en Mipmaps
+                texture.magFilter = THREE.LinearFilter;
+                
                 paintMaterial.map = texture;
                 paintMaterial.bumpMap = texture;
                 paintMaterial.bumpScale = 0.05;
-                paintMaterial.needsUpdate = true;
+                paintMaterial.needsUpdate = true; // Forzar regeneración en la GPU
 
                 if (isIOS && arButtonElement) {
                     try {
                         const exporter = new THREE.USDZExporter();
-                        const arGroup = new THREE.Group();
-                        const arTexture = texture.clone();
-                        arTexture.flipY = true; 
-                        arTexture.needsUpdate = true;
-
-                        const arCanvas = new THREE.Mesh(
-                            new THREE.BoxGeometry(0.56, 0.85, 0.005),
-                            new THREE.MeshStandardMaterial({ color: 0xffffff, map: arTexture, roughness: 0.5 })
-                        );
-                        arGroup.add(arCanvas);
-
-                        const arraybuffer = await exporter.parse(arGroup);
+                        const arraybuffer = await exporter.parse(painting);
                         const blob = new Blob([arraybuffer], { type: 'model/vnd.usdz+zip' });
                         const arUrl = URL.createObjectURL(blob);
                         
                         arButtonElement.setAttribute('href', arUrl);
                         arButtonElement.setAttribute('rel', 'ar');
                         arButtonElement.setAttribute('download', 'obra.usdz');
-                        arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN EL ESPACIO (AR)';
+                        arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN PARED (AR)';
                     } catch(e) {
                         console.error("Error USDZ:", e);
                         arButtonElement.innerHTML = '<i class="ph ph-warning text-sm"></i> ERROR AR';
@@ -635,44 +574,15 @@
         }
 
         function animate3D() {
-            renderer.setAnimationLoop((timestamp, frame) => {
-                if(renderer.xr.isPresenting) {
-                    if (frame && !isARPlaced) {
-                        const referenceSpace = renderer.xr.getReferenceSpace();
-                        const session = renderer.xr.getSession();
-
-                        if (!hitTestSourceRequested) {
-                            session.requestReferenceSpace('viewer').then((viewerSpace) => {
-                                session.requestHitTestSource({ space: viewerSpace }).then((source) => {
-                                    hitTestSource = source;
-                                });
-                            });
-                            session.addEventListener('end', () => {
-                                hitTestSourceRequested = false;
-                                hitTestSource = null;
-                            });
-                            hitTestSourceRequested = true;
-                        }
-
-                        if (hitTestSource) {
-                            const hitTestResults = frame.getHitTestResults(hitTestSource);
-                            if (hitTestResults.length > 0) {
-                                const hit = hitTestResults[0];
-                                
-                                // Extraer matriz y reconstruir posición/rotación con soporte para muros
-                                const hitPose = hit.getPose(referenceSpace);
-                                const hitMatrix = new THREE.Matrix4().fromArray(hitPose.transform.matrix);
-                                
-                                reticle.visible = true;
-                                reticle.matrix.copy(hitMatrix);
-                                reticle.matrix.decompose(reticle.position, reticle.quaternion, reticle.scale);
-
-                                if(arInstruction.innerText === "Escanea el piso o una pared") {
-                                    arInstruction.innerText = "Superficie detectada. Toca para ubicar";
-                                }
-                            } else {
-                                reticle.visible = false;
-                            }
+            renderer.setAnimationLoop(() => {
+                if(xrSession) {
+                    // [ENFOQUE SENIOR] Lógica para que arGroup siga a la cámara
+                    const referenceSpace = renderer.xr.getReferenceSpace();
+                    if (referenceSpace) {
+                        const pose = xrSession.viewerPose;
+                        if (pose) {
+                            arGroup.matrix.fromArray(pose.transform.matrix);
+                            arGroup.matrixAutoUpdate = false;
                         }
                     }
                 } else {
