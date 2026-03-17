@@ -138,12 +138,6 @@
         </p>
     </div>
 
-    <div id="pagination-controls" class="absolute top-[320px] md:top-[380px] left-6 md:left-12 z-30 flex items-center gap-5 glass-panel px-5 py-2 rounded-full border border-champagne/40 shadow-lg transition-opacity duration-500">
-        <button onclick="changeArtwork(-1)" class="text-champagne hover:text-white transition-colors p-1 pointer-events-auto active:scale-90"><i class="ph ph-minus text-lg"></i></button>
-        <span class="text-beige font-sans text-[10px] tracking-[0.2em] font-medium uppercase">Obra <span id="current-page">1</span> de <span id="total-pages">2</span></span>
-        <button onclick="changeArtwork(1)" class="text-champagne hover:text-white transition-colors p-1 pointer-events-auto active:scale-90"><i class="ph ph-plus text-lg"></i></button>
-    </div>
-
     <div id="canvas-3d-container" class="absolute inset-0 w-full h-full z-10 pointer-events-none cursor-grab active:cursor-grabbing"></div>
 
     <div id="tutorial-3d" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 z-20 transition-opacity duration-500">
@@ -164,10 +158,17 @@
     </div>
 
     <button id="btn-close-3d" class="absolute top-6 left-6 z-40 px-5 py-2 rounded-full border border-champagne/50 bg-black/60 text-champagne flex items-center gap-2 hover:bg-champagne hover:text-black transition-all opacity-0 pointer-events-none font-sans text-[10px] tracking-[0.2em] uppercase backdrop-blur-md">
-        <i class="ph ph-x text-sm"></i> Salir de Exploración
+        <i class="ph ph-x text-sm"></i> Salir
     </button>
 
     <div id="action-menu" class="absolute bottom-8 left-0 w-full px-6 z-30 flex flex-col items-center gap-3 transition-opacity duration-500">
+        
+        <div id="pagination-controls" class="flex items-center gap-6 glass-panel px-6 py-2.5 mb-1 rounded-full border border-champagne/40 shadow-lg pointer-events-auto">
+            <button onclick="changeArtwork(-1)" class="text-champagne hover:text-white transition-colors p-1 active:scale-90"><i class="ph ph-minus text-lg"></i></button>
+            <span class="text-beige font-sans text-[10px] tracking-[0.2em] font-medium uppercase">Obra <span id="current-page">1</span> de <span id="total-pages">2</span></span>
+            <button onclick="changeArtwork(1)" class="text-champagne hover:text-white transition-colors p-1 active:scale-90"><i class="ph ph-plus text-lg"></i></button>
+        </div>
+
         <button id="btn-activate-3d" class="w-full max-w-sm py-4 rounded-xl border border-champagne text-forest bg-champagne hover:bg-white hover:border-white transition-colors font-sans text-xs font-semibold tracking-[0.2em] uppercase flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(200,169,126,0.2)]">
             <i class="ph ph-cube text-lg"></i> Explorar Obra en 3D
         </button>
@@ -226,7 +227,6 @@
 
     <script>
         // --- 1. BASE DE DATOS DE LAS OBRAS ---
-        // Aquí se aloja toda la data dinámica para que el código escale perfectamente
         const artworks = [
             {
                 title: "Vigía de la Memoria",
@@ -349,7 +349,7 @@
             document.getElementById('interview-content').innerHTML = art.interviews;
         }
         
-        updateUIContent(); // Llamada inicial
+        updateUIContent(); 
 
         function openModal(modalId) { document.getElementById(modalId).classList.add('active'); }
         function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
@@ -366,7 +366,6 @@
         const btnClose3D = document.getElementById('btn-close-3d');
         const infoOverlay = document.getElementById('info-overlay');
         const actionMenu = document.getElementById('action-menu');
-        const paginationControls = document.getElementById('pagination-controls');
         
         const tutorial3D = document.getElementById('tutorial-3d');
         const tutorialAR = document.getElementById('tutorial-ar');
@@ -494,7 +493,6 @@
                     
                     infoOverlay.style.display = 'none'; 
                     actionMenu.style.display = 'none'; 
-                    paginationControls.style.display = 'none';
                     btnClose3D.style.display = 'none';
                     
                     tutorialAR.classList.remove('hidden');
@@ -517,7 +515,6 @@
                     
                     infoOverlay.style.display = ''; 
                     actionMenu.style.display = ''; 
-                    paginationControls.style.display = '';
                     btnClose3D.style.display = '';
                     tutorialAR.classList.add('hidden');
                 };
@@ -689,7 +686,9 @@
             container3D.classList.remove('pointer-events-none');
             controls.autoRotate = false;
             gsap.to(painting.position, { y: 0, duration: 1, ease: 'power2.out' });
-            gsap.to([actionMenu, paginationControls], {opacity: 0, y: 20, pointerEvents: 'none', duration: 0.4});
+            
+            // Ocultamos el actionMenu completo, que ahora contiene también el paginador
+            gsap.to(actionMenu, {opacity: 0, y: 20, pointerEvents: 'none', duration: 0.4});
             gsap.to(infoOverlay, {opacity: 0, y: -20, duration: 0.4});
             gsap.to(btnClose3D, {opacity: 1, pointerEvents: 'auto', duration: 0.4, delay: 0.2});
             
@@ -711,7 +710,9 @@
             gsap.to(controls.target, { x: 0, y: 0, z: 0, duration: 1.5, ease: 'power2.inOut' });
             
             gsap.to(btnClose3D, {opacity: 0, pointerEvents: 'none', duration: 0.3});
-            gsap.to([actionMenu, paginationControls], {opacity: 1, y: 0, pointerEvents: 'auto', duration: 0.4, delay: 0.3});
+            
+            // Aparece todo el actionMenu junto al paginador con una sola llamada
+            gsap.to(actionMenu, {opacity: 1, y: 0, pointerEvents: 'auto', duration: 0.4, delay: 0.3});
             gsap.to(infoOverlay, {opacity: 1, y: 0, duration: 0.4, delay: 0.3});
             
             if(arButtonElement) arButtonElement.classList.remove('active-3d');
