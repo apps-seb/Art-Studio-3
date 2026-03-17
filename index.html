@@ -157,6 +157,32 @@
         </div>
     </div>
 
+    <div id="android-ar-tutorial" class="hidden absolute inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md transition-opacity duration-500 pointer-events-auto">
+        <div class="glass-panel p-8 rounded-3xl flex flex-col items-center gap-6 text-center max-w-[90%] md:max-w-sm border border-champagne/40 shadow-[0_0_50px_rgba(200,169,126,0.15)]">
+            <div class="w-16 h-16 rounded-full bg-champagne/20 flex items-center justify-center text-champagne mb-2">
+                <i class="ph ph-cube text-3xl"></i>
+            </div>
+            <h3 class="font-serif text-2xl text-beige">Guía de Realidad Aumentada</h3>
+            <div class="space-y-5 text-left w-full">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-champagne shrink-0 border border-champagne/30"><i class="ph ph-device-mobile-camera text-xl"></i></div>
+                    <p class="font-sans text-[11px] text-white/90 leading-relaxed"><strong class="text-champagne font-medium block mb-0.5 uppercase tracking-widest text-[9px]">Paso 1</strong>Mueve tu dispositivo lentamente apuntando a una pared o al suelo.</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-champagne shrink-0 border border-champagne/30"><i class="ph ph-target text-xl"></i></div>
+                    <p class="font-sans text-[11px] text-white/90 leading-relaxed"><strong class="text-champagne font-medium block mb-0.5 uppercase tracking-widest text-[9px]">Paso 2</strong>Aparecerá un anillo dorado cuando detectemos la superficie.</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-champagne shrink-0 border border-champagne/30"><i class="ph ph-hand-tap text-xl"></i></div>
+                    <p class="font-sans text-[11px] text-white/90 leading-relaxed"><strong class="text-champagne font-medium block mb-0.5 uppercase tracking-widest text-[9px]">Paso 3</strong>Toca la pantalla sobre el anillo para ubicar la obra.</p>
+                </div>
+            </div>
+            <button id="btn-entendido-ar" class="mt-4 w-full py-3.5 rounded-xl bg-champagne text-forest font-sans text-xs font-bold tracking-[0.2em] uppercase hover:bg-white transition-colors shadow-[0_0_20px_rgba(200,169,126,0.3)]">
+                Entendido
+            </button>
+        </div>
+    </div>
+
     <button id="btn-close-3d" class="absolute top-6 left-6 z-40 px-5 py-2 rounded-full border border-champagne/50 bg-black/60 text-champagne flex items-center gap-2 hover:bg-champagne hover:text-black transition-all opacity-0 pointer-events-none font-sans text-[10px] tracking-[0.2em] uppercase backdrop-blur-md">
         <i class="ph ph-x text-sm"></i> Salir
     </button>
@@ -370,6 +396,10 @@
         const tutorial3D = document.getElementById('tutorial-3d');
         const tutorialAR = document.getElementById('tutorial-ar');
         const arInstruction = document.getElementById('ar-instruction');
+        
+        const androidArTutorial = document.getElementById('android-ar-tutorial');
+        const btnEntendidoAr = document.getElementById('btn-entendido-ar');
+        
         let tutorial3DDone = false;
 
         let scene, camera, renderer, controls, painting, paintMaterial, reticle;
@@ -442,7 +472,8 @@
 
             const controller = renderer.xr.getController(0);
             controller.addEventListener('select', () => {
-                if (reticle.visible && !isARPlaced) {
+                // Solo permitimos colocar si el modal tutorial está oculto
+                if (reticle.visible && !isARPlaced && androidArTutorial.classList.contains('hidden')) {
                     painting.position.setFromMatrixPosition(reticle.matrix);
                     
                     // Lógica inteligente de alineación espacial
@@ -514,8 +545,9 @@
                     actionMenu.style.display = 'none'; 
                     btnClose3D.style.display = 'none';
                     
-                    tutorialAR.classList.remove('hidden');
-                    arInstruction.innerText = "Mueve tu teléfono para escanear";
+                    // Mostrar nuestro nuevo modal tutorial de Android con GSAP
+                    androidArTutorial.classList.remove('hidden');
+                    gsap.fromTo(androidArTutorial, {opacity: 0}, {opacity: 1, duration: 0.4});
                 };
 
                 const onSessionEnded = () => {
@@ -539,6 +571,12 @@
                     actionMenu.style.display = ''; 
                     btnClose3D.style.display = '';
                     tutorialAR.classList.add('hidden');
+                    
+                    // Por si el usuario cierra la sesión antes de quitar el modal
+                    if(!androidArTutorial.classList.contains('hidden')) {
+                        androidArTutorial.classList.add('hidden');
+                        androidArTutorial.style.opacity = 0;
+                    }
                 };
 
                 if ('xr' in navigator) {
@@ -717,7 +755,8 @@
 
                         if (hitTestSource) {
                             const hitTestResults = frame.getHitTestResults(hitTestSource);
-                            if (hitTestResults.length > 0) {
+                            // Solo mostramos el retículo si el modal tutorial ya fue cerrado
+                            if (hitTestResults.length > 0 && androidArTutorial.classList.contains('hidden')) {
                                 const hit = hitTestResults[0];
                                 reticle.visible = true;
                                 reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
@@ -740,7 +779,22 @@
             init3D();
         }
 
-        // Eventos UI
+        // --- Eventos UI ---
+        
+        // Evento para cerrar el nuevo modal tutorial de Android
+        btnEntendidoAr.addEventListener('click', () => {
+            gsap.to(androidArTutorial, { 
+                opacity: 0, 
+                duration: 0.4, 
+                onComplete: () => {
+                    androidArTutorial.classList.add('hidden');
+                    // Una vez cerrado, mostramos la instrucción flotante de la parte inferior
+                    tutorialAR.classList.remove('hidden');
+                    arInstruction.innerText = "Mueve tu teléfono para escanear";
+                }
+            });
+        });
+
         btnActivate3D.addEventListener('click', () => {
             container3D.classList.remove('pointer-events-none');
             controls.autoRotate = false;
