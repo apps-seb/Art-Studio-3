@@ -293,7 +293,7 @@
                 technique: '<strong class="text-champagne font-normal">Técnica:</strong> Óleo y acrílico sobre madera reciclada.',
                 year: '<strong class="text-champagne font-normal">Año:</strong> 2026',
                 description: "Representa los ríos y montañas que atestiguaron el conflicto y ahora abrazan la esperanza.",
-                image: "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1000&auto=format&fit=crop", 
+                image: "IMG_6435.jpeg", 
                 historyTitle: 'El Flujo de la<br><span class="italic text-champagne">Vida</span>',
                 historyText: `
                     <p>A diferencia de la rigidez del pasado, esta obra busca la fluidez. Los colores vivos trazan los caminos de agua que cruzan el Cauca, purificando la memoria y llevando vida a nuevos territorios.</p>
@@ -619,10 +619,22 @@
                 }
             });
 
-            gsap.to(painting.rotation, { y: painting.rotation.y + Math.PI / 2, duration: 0.4, ease: "power1.in", onComplete: () => {
-                loadTextureAndAR(artworks[currentArtIndex].image);
-                gsap.to(painting.rotation, { y: painting.rotation.y + Math.PI / 2, duration: 0.4, ease: "power1.out" });
-            }});
+            const startRotY = painting.rotation.y; // Capturamos la rotación base actual
+
+            // Animamos 90 grados para ocultar la cara, cambiamos textura y rebotamos de vuelta a 0
+            gsap.to(painting.rotation, { 
+                y: startRotY + Math.PI / 2, 
+                duration: 0.4, 
+                ease: "power1.in", 
+                onComplete: () => {
+                    loadTextureAndAR(artworks[currentArtIndex].image);
+                    gsap.to(painting.rotation, { 
+                        y: startRotY, // Regresamos a la posición inicial frontal
+                        duration: 0.4, 
+                        ease: "power1.out" 
+                    });
+                }
+            });
         };
 
         function onWindowResize() {
