@@ -610,6 +610,9 @@
             if(newIndex >= artworks.length) newIndex = 0;
             currentArtIndex = newIndex;
             
+            // Pausamos el giro automático para sincronizar la transición perfecta
+            controls.autoRotate = false;
+
             gsap.to(["#info-overlay", "#modal-historia .modal-content", "#modal-entrevista .modal-content"], {
                 opacity: 0, 
                 duration: 0.3, 
@@ -619,19 +622,41 @@
                 }
             });
 
-            const startRotY = painting.rotation.y; // Capturamos la rotación base actual
+            // Forzamos la cámara de regreso a su eje central frontal
+            const aspect = window.innerWidth / window.innerHeight;
+            const targetZ = aspect < 1 ? 14 : 9;
 
-            // Animamos 90 grados para ocultar la cara, cambiamos textura y rebotamos de vuelta a 0
+            gsap.to(camera.position, { 
+                x: 0, 
+                y: 0, 
+                z: targetZ, 
+                duration: 0.8, 
+                ease: "power2.inOut",
+                onUpdate: () => controls.update()
+            });
+
+            gsap.to(controls.target, { 
+                x: 0, y: 0, z: 0, 
+                duration: 0.8, 
+                ease: "power2.inOut" 
+            });
+
+            // Animación de rotación: gira a 90°, cambia textura, entra desde -90° y vuelve a 0° (Frente Perfecto)
             gsap.to(painting.rotation, { 
-                y: startRotY + Math.PI / 2, 
+                y: Math.PI / 2, 
                 duration: 0.4, 
                 ease: "power1.in", 
                 onComplete: () => {
                     loadTextureAndAR(artworks[currentArtIndex].image);
+                    painting.rotation.y = -Math.PI / 2; // Reseteo al lado opuesto (efecto carta)
                     gsap.to(painting.rotation, { 
-                        y: startRotY, // Regresamos a la posición inicial frontal
+                        y: 0, // Cara frontal perfecta de vuelta
                         duration: 0.4, 
-                        ease: "power1.out" 
+                        ease: "power1.out",
+                        onComplete: () => {
+                            // Reiniciamos el giro automático sin saltos ni desfases
+                            controls.autoRotate = true;
+                        }
                     });
                 }
             });
