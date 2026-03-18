@@ -192,7 +192,7 @@
     <div id="tutorial-ar" class="hidden absolute bottom-20 left-0 w-full flex justify-center z-50 pointer-events-none transition-opacity duration-300">
         <div class="glass-panel px-6 py-3 rounded-full flex items-center gap-3 border border-champagne/40 shadow-[0_0_20px_rgba(200,169,126,0.3)] animate-bounce">
             <i class="ph ph-device-mobile-camera text-2xl text-champagne"></i>
-            <span id="ar-instruction" class="text-xs text-white tracking-[0.1em] uppercase font-sans font-medium">Buscando superficie...</span>
+            <span id="ar-instruction" class="text-xs text-white tracking-[0.1em] uppercase font-sans font-medium">Ubica el cuadro y presiona la pantalla</span>
         </div>
     </div>
 
@@ -379,10 +379,6 @@
         let xrSession = null;
         let isARPlaced = false;
 
-        // Variables para Auto-Hit-Test
-        let hitTestSource = null;
-        let hitTestSourceRequested = false;
-
         function init3D() {
             scene = new THREE.Scene();
             const aspect = window.innerWidth / window.innerHeight;
@@ -407,7 +403,7 @@
             controls.autoRotate = true; 
             controls.autoRotateSpeed = 1.5;
 
-            // ILUMINACIÓN (Código Original Intacto para no dañar textura)
+            // ILUMINACIÓN
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.3); 
             scene.add(ambientLight);
             
@@ -428,7 +424,7 @@
             painting.position.y = aspect < 1 ? 1.5 : 0; 
             scene.add(painting);
 
-            // Ajuste estricto PBR: roughness a 0.9 y metalness a 0.0 anulan el plástico (Código Original)
+            // Ajuste estricto PBR: roughness a 0.9 y metalness a 0.0 anulan el plástico
             paintMaterial = new THREE.MeshStandardMaterial({ 
                 color: 0xffffff, 
                 roughness: 0.9, 
@@ -444,6 +440,16 @@
             const frontMesh = new THREE.Mesh(new THREE.BoxGeometry(5.6, 8.5, 0.01), paintMaterial);
             frontMesh.position.z = 0.095; 
             painting.add(frontMesh);
+
+            const controller = renderer.xr.getController(0);
+            controller.addEventListener('select', () => {
+                if (renderer.xr.isPresenting && !isARPlaced) {
+                    isARPlaced = true; 
+                    arInstruction.innerText = "¡Obra fijada con éxito!";
+                    setTimeout(() => { tutorialAR.classList.add('hidden'); }, 3000);
+                }
+            });
+            scene.add(controller);
 
             isIOS = (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !window.MSStream;
 
@@ -477,8 +483,8 @@
                     painting.userData.originalScale = painting.scale.clone();
                     painting.userData.originalQuat = painting.quaternion.clone();
                     
-                    painting.scale.set(0.12, 0.12, 0.12); 
-                    painting.visible = false; // Se oculta hasta encontrar la superficie
+                    painting.scale.set(0.1, 0.1, 0.1); 
+                    painting.visible = true;
                     isARPlaced = false;
                     
                     infoOverlay.style.display = 'none'; 
@@ -486,15 +492,13 @@
                     btnClose3D.style.display = 'none';
                     
                     tutorialAR.classList.remove('hidden');
-                    arInstruction.innerText = "Buscando superficie...";
+                    arInstruction.innerText = "Ubica el cuadro y presiona la pantalla";
                 };
 
                 const onSessionEnded = () => {
                     if (xrSession) xrSession.removeEventListener('end', onSessionEnded);
                     xrSession = null;
                     isARPlaced = false;
-                    hitTestSourceRequested = false;
-                    hitTestSource = null;
                     
                     controls.enabled = true;
                     arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN PARED (AR)';
@@ -517,7 +521,6 @@
                                 if (xrSession === null) {
                                     try {
                                         const session = await navigator.xr.requestSession('immersive-ar', {
-                                            requiredFeatures: ['hit-test'],
                                             optionalFeatures: ['dom-overlay'],
                                             domOverlay: { root: document.body }
                                         });
@@ -557,7 +560,6 @@
                 arButtonElement.removeAttribute('href');
             }
 
-            // (Código Original Intacto para garantizar el color y shader correcto)
             textureLoader.load(imageUrl, async function(texture) {
                 texture.encoding = THREE.sRGBEncoding;
                 texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -670,42 +672,21 @@
         }
 
         function animate3D() {
-            renderer.setAnimationLoop((timestamp, frame) => {
+            renderer.setAnimationLoop(() => {
                 if(renderer.xr.isPresenting) {
-                    if (frame && !isARPlaced) {
-                        const referenceSpace = renderer.xr.getReferenceSpace();
-                        const session = renderer.xr.getSession();
+                    if (!isARPlaced) {
+                        const cameraPos = new THREE.Vector3();
+                        camera.getWorldPosition(cameraPos);
 
-                        if (!hitTestSourceRequested) {
-                            session.requestReferenceSpace('viewer').then((viewerSpace) => {
-                                session.requestHitTestSource({ space: viewerSpace }).then((source) => {
-                                    hitTestSource = source;
-                                });
-                            });
-                            session.addEventListener('end', () => {
-                                hitTestSourceRequested = false;
-                                hitTestSource = null;
-                            });
-                            hitTestSourceRequested = true;
-                        }
+                        const cameraDir = new THREE.Vector3(0, 0, -1);
+                        cameraDir.applyQuaternion(camera.quaternion);
+                        cameraDir.y = 0; 
+                        cameraDir.normalize();
 
-                        if (hitTestSource) {
-                            const hitTestResults = frame.getHitTestResults(hitTestSource);
-                            if (hitTestResults.length > 0) {
-                                // Encontró superficie, colocar cuadro inmediatamente
-                                const hit = hitTestResults[0];
-                                const pose = hit.getPose(referenceSpace);
-                                
-                                painting.position.setFromMatrixPosition(pose.transform.matrix);
-                                painting.quaternion.setFromRotationMatrix(pose.transform.matrix);
-                                
-                                painting.visible = true;
-                                isARPlaced = true;
-                                
-                                arInstruction.innerText = "¡Obra fijada con éxito!";
-                                setTimeout(() => { tutorialAR.classList.add('hidden'); }, 3000);
-                            }
-                        }
+                        painting.position.copy(cameraPos).add(cameraDir.multiplyScalar(1.5));
+                        painting.position.y = cameraPos.y; 
+
+                        painting.lookAt(cameraPos.x, painting.position.y, cameraPos.z);
                     }
                 } else {
                     controls.update(); 
