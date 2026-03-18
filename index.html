@@ -390,6 +390,11 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.outputEncoding = THREE.sRGBEncoding;
+            
+            // TONE MAPPING FOTOGRÁFICO PARA MAYOR REALISMO Y MEJOR ILUMINACIÓN
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.05; 
+            
             renderer.xr.enabled = true;
             container3D.appendChild(renderer.domElement);
 
@@ -399,40 +404,40 @@
             controls.autoRotate = true; 
             controls.autoRotateSpeed = 1.5;
 
-            // ILUMINACIÓN ESTILO GALERÍA DE ARTE
-            // Luz de ambiente baja para generar contraste dramático
-            scene.add(new THREE.HemisphereLight(0xffffff, 0x111111, 0.3));
-            const globalAmbientLight = new THREE.AmbientLight(0xffffff, 0.4);
-            scene.add(globalAmbientLight);
+            // --- ILUMINACIÓN ROBUSTA (Ajustada para Relieves y Texturas) ---
             
-            // Foco de galería dramático (sigue a la cámara y apunta a la obra)
-            const mainSpotlight = new THREE.SpotLight(0xfff5e6, 3.5); // Luz más cálida y potente
-            mainSpotlight.position.set(4, 5, 8); // Posición oblicua y alta
-            mainSpotlight.angle = Math.PI / 5;
-            mainSpotlight.penumbra = 0.6; // Bordes muy suaves
-            mainSpotlight.decay = 1.5;
-            mainSpotlight.distance = 50;
-            camera.add(mainSpotlight);
-
-            // Luz direccional lateral para revelar fuertemente la textura (bump)
-            const sideTextureLight = new THREE.DirectionalLight(0xffeedd, 1.2);
-            sideTextureLight.position.set(-5, 2, 3); // Incidencia muy lateral
-            camera.add(sideTextureLight);
-
+            // 1. Luz Ambiental muy tenue para que el relieve del bumpMap proyecte micro-sombras
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3); 
+            scene.add(ambientLight);
+            
+            // 2. Luz de rebote (Hemisphere) reducida para no "lavar" el cuadro
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.4));
+            
+            // 3. Luz principal direccional fija en la escena (resalta la textura al rotar el objeto)
+            const dirLight = new THREE.DirectionalLight(0xfff4e5, 1.4);
+            dirLight.position.set(5, 5, 4);
+            scene.add(dirLight);
+            
+            // 4. Luz suave de relleno que sigue a la cámara
+            const cameraLight = new THREE.SpotLight(0xffffff, 0.6);
+            cameraLight.position.set(0, 0, 5);
+            cameraLight.angle = Math.PI / 3;
+            cameraLight.penumbra = 0.6;
+            camera.add(cameraLight);
             scene.add(camera);
 
             painting = new THREE.Group();
             painting.position.y = aspect < 1 ? 1.5 : 0; 
             scene.add(painting);
 
+            // Ajuste de Material PBR para simular pintura real
             paintMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0xffffff,
-                roughness: 0.75, // Lienzo mate, refleja luz difusamente pero no como plástico
-                metalness: 0.0, // El lienzo/pintura no es metálico
-                bumpScale: 0.1 // Este valor será re-asignado luego, pero por si acaso
+                color: 0xffffff, 
+                roughness: 0.75, // Más rugoso para simular el lienzo/pintura real
+                metalness: 0.0   // Eliminado el aspecto metálico/plástico
             });
             const sideMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x000000, roughness: 0.85, metalness: 0.1 
+                color: 0x000000, roughness: 0.9, metalness: 0.0 
             });
             
             const baseMesh = new THREE.Mesh(new THREE.BoxGeometry(5.6, 8.5, 0.18), sideMaterial);
@@ -446,7 +451,7 @@
             const controller = renderer.xr.getController(0);
             controller.addEventListener('select', () => {
                 if (renderer.xr.isPresenting && !isARPlaced) {
-                    isARPlaced = true; // Congelamos la posición actual
+                    isARPlaced = true; 
                     arInstruction.innerText = "¡Obra fijada con éxito!";
                     setTimeout(() => { tutorialAR.classList.add('hidden'); }, 3000);
                 }
@@ -565,19 +570,16 @@
 
             textureLoader.load(imageUrl, async function(texture) {
                 texture.encoding = THREE.sRGBEncoding;
-                // Anisotropy máxima para que la textura se vea nítida en ángulos laterales extremos
+                // Anisotropía para alta calidad visual en ángulos
                 texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                texture.minFilter = THREE.LinearMipmapLinearFilter;
-
+                
                 paintMaterial.map = texture;
                 paintMaterial.bumpMap = texture;
-                // Aumentar un poco más la altura del relieve para pinceladas más gruesas e impresionistas
-                paintMaterial.bumpScale = 0.12;
+                paintMaterial.bumpScale = 0.08; // Aumentado ligeramente para mayor percepción de volumen
                 paintMaterial.needsUpdate = true;
 
                 if (isIOS && arButtonElement) {
                     try {
-                        // RESTAURACIÓN EXACTA DEL BLOQUE ORIGINAL PARA IOS
                         const exporter = new THREE.USDZExporter();
                         const arGroup = new THREE.Group();
                         const arTexture = texture.clone();
@@ -675,20 +677,17 @@
                 // LÓGICA DE ORTOGONALIDAD ESTRICTA PARA ANDROID
                 if(renderer.xr.isPresenting) {
                     if (!isARPlaced) {
-                        // Calcular posición a 1.5 metros de la cámara
                         const cameraPos = new THREE.Vector3();
                         camera.getWorldPosition(cameraPos);
 
                         const cameraDir = new THREE.Vector3(0, 0, -1);
                         cameraDir.applyQuaternion(camera.quaternion);
-                        // Bloqueo crítico: Impedimos rotaciones diagonales o inclinaciones en Z
                         cameraDir.y = 0; 
                         cameraDir.normalize();
 
                         painting.position.copy(cameraPos).add(cameraDir.multiplyScalar(1.5));
-                        painting.position.y = cameraPos.y; // Mantener a la altura de los ojos
+                        painting.position.y = cameraPos.y; 
 
-                        // Obligar al cuadro a mirar a la cámara manteniéndose derecho
                         painting.lookAt(cameraPos.x, painting.position.y, cameraPos.z);
                     }
                 } else {
