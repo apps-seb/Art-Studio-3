@@ -404,19 +404,20 @@
             controls.autoRotateSpeed = 1.5;
 
             // ILUMINACIÓN
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3); 
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambientLight);
             
-            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.4));
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.5));
             
-            const dirLight = new THREE.DirectionalLight(0xfff4e5, 1.4);
+            const dirLight = new THREE.DirectionalLight(0xfff4e5, 1.2);
             dirLight.position.set(5, 5, 4);
             scene.add(dirLight);
             
-            const cameraLight = new THREE.SpotLight(0xffffff, 0.6);
-            cameraLight.position.set(0, 0, 5);
-            cameraLight.angle = Math.PI / 3;
-            cameraLight.penumbra = 0.6;
+            // Usamos una luz direccional anclada a la cámara en lugar de SpotLight
+            // para asegurar que el cuadro en AR siempre esté bien iluminado frontalmente
+            // sin importar a dónde mire el usuario, evitando texturas oscuras o irreales.
+            const cameraLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            cameraLight.position.set(0, 0, 1);
             camera.add(cameraLight);
             scene.add(camera);
 
@@ -444,7 +445,13 @@
             const controller = renderer.xr.getController(0);
             controller.addEventListener('select', () => {
                 if (renderer.xr.isPresenting && !isARPlaced) {
+                    // Fijamos la obra:
                     isARPlaced = true; 
+
+                    // La obra ya no se moverá con la cámara en animate3D,
+                    // mantendrá la posición y rotación que tiene en este momento,
+                    // quedando "pegada en la pared" a la altura y lugar donde el usuario apuntaba.
+
                     arInstruction.innerText = "¡Obra fijada con éxito!";
                     setTimeout(() => { tutorialAR.classList.add('hidden'); }, 3000);
                 }
@@ -483,7 +490,9 @@
                     painting.userData.originalScale = painting.scale.clone();
                     painting.userData.originalQuat = painting.quaternion.clone();
                     
-                    painting.scale.set(0.1, 0.1, 0.1); 
+                    // Se usa una escala más realista (0.3 es un tamaño razonable para una obra grande en AR
+                    // en lugar de 0.1 que la hacía verse demasiado pequeña y pixelada).
+                    painting.scale.set(0.3, 0.3, 0.3);
                     painting.visible = true;
                     isARPlaced = false;
                     
@@ -568,7 +577,9 @@
                 paintMaterial.bumpMap = texture;
                 
                 // 1. AUMENTO DRÁSTICO DEL RELIEVE PARA WEBGL
-                paintMaterial.bumpScale = 0.18; 
+                // Reducimos el bumpScale un poco para evitar que se vea tan irreal (plástico/exagerado)
+                // cuando se ve de cerca en AR.
+                paintMaterial.bumpScale = 0.08;
                 paintMaterial.needsUpdate = true;
 
                 if (isIOS && arButtonElement) {
@@ -680,13 +691,15 @@
 
                         const cameraDir = new THREE.Vector3(0, 0, -1);
                         cameraDir.applyQuaternion(camera.quaternion);
-                        cameraDir.y = 0; 
+                        // Permitimos que la dirección en Y también se use para mantener el cuadro centrado
+                        // Si el usuario mira arriba o abajo, el cuadro lo sigue.
                         cameraDir.normalize();
 
-                        painting.position.copy(cameraPos).add(cameraDir.multiplyScalar(1.5));
-                        painting.position.y = cameraPos.y; 
+                        // Colocamos el cuadro a una distancia cómoda (e.g. 2 metros)
+                        painting.position.copy(cameraPos).add(cameraDir.multiplyScalar(2.0));
 
-                        painting.lookAt(cameraPos.x, painting.position.y, cameraPos.z);
+                        // Hacemos que mire exactamente a la cámara
+                        painting.lookAt(cameraPos);
                     }
                 } else {
                     controls.update(); 
