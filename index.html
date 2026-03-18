@@ -192,7 +192,7 @@
     <div id="tutorial-ar" class="hidden absolute bottom-20 left-0 w-full flex justify-center z-50 pointer-events-none transition-opacity duration-300">
         <div class="glass-panel px-6 py-3 rounded-full flex items-center gap-3 border border-champagne/40 shadow-[0_0_20px_rgba(200,169,126,0.3)] animate-bounce">
             <i class="ph ph-device-mobile-camera text-2xl text-champagne"></i>
-            <span id="ar-instruction" class="text-xs text-white tracking-[0.1em] uppercase font-sans font-medium">Ubica el cuadro y presiona la pantalla</span>
+            <span id="ar-instruction" class="text-xs text-white tracking-[0.1em] uppercase font-sans font-medium">Escanea la superficie con tu cámara</span>
         </div>
     </div>
 
@@ -379,6 +379,12 @@
         let xrSession = null;
         let isARPlaced = false;
 
+        // Variables de WebXR Hit-Test
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
+        let localReferenceSpace = null;
+        let reticle;
+
         function init3D() {
             scene = new THREE.Scene();
             const aspect = window.innerWidth / window.innerHeight;
@@ -424,7 +430,6 @@
             painting.position.y = aspect < 1 ? 1.5 : 0; 
             scene.add(painting);
 
-            // Ajuste estricto PBR: roughness a 0.9 y metalness a 0.0 anulan el plástico
             paintMaterial = new THREE.MeshStandardMaterial({ 
                 color: 0xffffff, 
                 roughness: 0.9, 
@@ -441,10 +446,41 @@
             frontMesh.position.z = 0.095; 
             painting.add(frontMesh);
 
+            // --- RETÍCULA PARA HIT-TEST (Aro + Cuadrícula) ---
+            const reticleGroup = new THREE.Group();
+            reticleGroup.matrixAutoUpdate = false;
+            reticleGroup.visible = false;
+            scene.add(reticleGroup);
+
+            // Aro Champagne
+            const ringGeo = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xC8A97E });
+            reticleGroup.add(new THREE.Mesh(ringGeo, ringMat));
+
+            // Cuadrícula interior/indicadora
+            const gridGeo = new THREE.GridHelper(1, 10, 0xC8A97E, 0xC8A97E);
+            gridGeo.material.opacity = 0.5;
+            gridGeo.material.transparent = true;
+            reticleGroup.add(gridGeo);
+
+            reticle = reticleGroup;
+
+            // EVENTO DE SELECCIÓN EN AR (Tocar la pantalla)
             const controller = renderer.xr.getController(0);
             controller.addEventListener('select', () => {
-                if (renderer.xr.isPresenting && !isARPlaced) {
+                if (renderer.xr.isPresenting && !isARPlaced && reticle.visible) {
                     isARPlaced = true; 
+                    
+                    // Aplicar la posición y rotación exacta de la superficie
+                    painting.position.setFromMatrixPosition(reticle.matrix);
+                    painting.quaternion.setFromRotationMatrix(reticle.matrix);
+                    
+                    // Rotar el cuadro para que quede perpendicular a la normal de la pared
+                    painting.rotateX(-Math.PI / 2);
+                    
+                    painting.visible = true;
+                    reticle.visible = false;
+                    
                     arInstruction.innerText = "¡Obra fijada con éxito!";
                     setTimeout(() => { tutorialAR.classList.add('hidden'); }, 3000);
                 }
@@ -484,21 +520,29 @@
                     painting.userData.originalQuat = painting.quaternion.clone();
                     
                     painting.scale.set(0.1, 0.1, 0.1); 
-                    painting.visible = true;
+                    painting.visible = false; // Ocultar hasta fijar
                     isARPlaced = false;
+                    hitTestSourceRequested = false;
+                    hitTestSource = null;
                     
                     infoOverlay.style.display = 'none'; 
                     actionMenu.style.display = 'none'; 
                     btnClose3D.style.display = 'none';
                     
                     tutorialAR.classList.remove('hidden');
-                    arInstruction.innerText = "Ubica el cuadro y presiona la pantalla";
+                    arInstruction.innerText = "Mueve tu dispositivo para escanear la pared";
                 };
 
                 const onSessionEnded = () => {
                     if (xrSession) xrSession.removeEventListener('end', onSessionEnded);
                     xrSession = null;
                     isARPlaced = false;
+                    
+                    if (hitTestSource) { hitTestSource.cancel(); }
+                    hitTestSource = null;
+                    hitTestSourceRequested = false;
+                    localReferenceSpace = null;
+                    if (reticle) reticle.visible = false;
                     
                     controls.enabled = true;
                     arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN PARED (AR)';
@@ -521,6 +565,7 @@
                                 if (xrSession === null) {
                                     try {
                                         const session = await navigator.xr.requestSession('immersive-ar', {
+                                            requiredFeatures: ['hit-test'],
                                             optionalFeatures: ['dom-overlay'],
                                             domOverlay: { root: document.body }
                                         });
@@ -566,8 +611,6 @@
                 
                 paintMaterial.map = texture;
                 paintMaterial.bumpMap = texture;
-                
-                // 1. AUMENTO DRÁSTICO DEL RELIEVE PARA WEBGL
                 paintMaterial.bumpScale = 0.18; 
                 paintMaterial.needsUpdate = true;
 
@@ -579,7 +622,6 @@
                         arTexture.flipY = true; 
                         arTexture.needsUpdate = true;
 
-                        // 2. FIX EFECTO PLÁSTICO EN iOS: roughness a 0.95 y metalness a 0.0
                         const arCanvas = new THREE.Mesh(
                             new THREE.BoxGeometry(0.56, 0.85, 0.005),
                             new THREE.MeshStandardMaterial({ 
@@ -672,21 +714,38 @@
         }
 
         function animate3D() {
-            renderer.setAnimationLoop(() => {
+            renderer.setAnimationLoop((timestamp, frame) => {
                 if(renderer.xr.isPresenting) {
-                    if (!isARPlaced) {
-                        const cameraPos = new THREE.Vector3();
-                        camera.getWorldPosition(cameraPos);
+                    if (!isARPlaced && frame) {
+                        const session = renderer.xr.getSession();
+                        
+                        if (!hitTestSourceRequested) {
+                            session.requestReferenceSpace('viewer').then(function(referenceSpace) {
+                                session.requestHitTestSource({ space: referenceSpace }).then(function(source) {
+                                    hitTestSource = source;
+                                });
+                            });
+                            session.requestReferenceSpace('local').then(function(referenceSpace) {
+                                localReferenceSpace = referenceSpace;
+                            });
+                            hitTestSourceRequested = true;
+                        }
 
-                        const cameraDir = new THREE.Vector3(0, 0, -1);
-                        cameraDir.applyQuaternion(camera.quaternion);
-                        cameraDir.y = 0; 
-                        cameraDir.normalize();
-
-                        painting.position.copy(cameraPos).add(cameraDir.multiplyScalar(1.5));
-                        painting.position.y = cameraPos.y; 
-
-                        painting.lookAt(cameraPos.x, painting.position.y, cameraPos.z);
+                        if (hitTestSource && localReferenceSpace) {
+                            const hitTestResults = frame.getHitTestResults(hitTestSource);
+                            
+                            if (hitTestResults.length > 0) {
+                                const hit = hitTestResults[0];
+                                const pose = hit.getPose(localReferenceSpace);
+                                
+                                reticle.visible = true;
+                                reticle.matrix.fromArray(pose.transform.matrix);
+                                arInstruction.innerText = "Toca el aro para fijar la obra";
+                            } else {
+                                reticle.visible = false;
+                                arInstruction.innerText = "Buscando superficie... mueve la cámara";
+                            }
+                        }
                     }
                 } else {
                     controls.update(); 
