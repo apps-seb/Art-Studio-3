@@ -391,7 +391,6 @@
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.outputEncoding = THREE.sRGBEncoding;
             
-            // TONE MAPPING FOTOGRÁFICO PARA MAYOR REALISMO Y MEJOR ILUMINACIÓN
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1.05; 
             
@@ -404,21 +403,16 @@
             controls.autoRotate = true; 
             controls.autoRotateSpeed = 1.5;
 
-            // --- ILUMINACIÓN ROBUSTA (Ajustada para Relieves y Texturas) ---
-            
-            // 1. Luz Ambiental muy tenue para que el relieve del bumpMap proyecte micro-sombras
+            // ILUMINACIÓN
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.3); 
             scene.add(ambientLight);
             
-            // 2. Luz de rebote (Hemisphere) reducida para no "lavar" el cuadro
             scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.4));
             
-            // 3. Luz principal direccional fija en la escena (resalta la textura al rotar el objeto)
             const dirLight = new THREE.DirectionalLight(0xfff4e5, 1.4);
             dirLight.position.set(5, 5, 4);
             scene.add(dirLight);
             
-            // 4. Luz suave de relleno que sigue a la cámara
             const cameraLight = new THREE.SpotLight(0xffffff, 0.6);
             cameraLight.position.set(0, 0, 5);
             cameraLight.angle = Math.PI / 3;
@@ -430,11 +424,11 @@
             painting.position.y = aspect < 1 ? 1.5 : 0; 
             scene.add(painting);
 
-            // Ajuste de Material PBR para simular pintura real
+            // Ajuste estricto PBR: roughness a 0.9 y metalness a 0.0 anulan el plástico
             paintMaterial = new THREE.MeshStandardMaterial({ 
                 color: 0xffffff, 
-                roughness: 0.75, // Más rugoso para simular el lienzo/pintura real
-                metalness: 0.0   // Eliminado el aspecto metálico/plástico
+                roughness: 0.9, 
+                metalness: 0.0   
             });
             const sideMaterial = new THREE.MeshStandardMaterial({ 
                 color: 0x000000, roughness: 0.9, metalness: 0.0 
@@ -447,7 +441,6 @@
             frontMesh.position.z = 0.095; 
             painting.add(frontMesh);
 
-            // CONTROL DE TOQUE PARA ANDROID (Fijar en la pared)
             const controller = renderer.xr.getController(0);
             controller.addEventListener('select', () => {
                 if (renderer.xr.isPresenting && !isARPlaced) {
@@ -472,7 +465,6 @@
                     }
                 });
             } else {
-                // CONFIGURACIÓN PARA ANDROID WEBXR
                 arButtonElement = document.createElement('button');
                 arButtonElement.id = 'ARButton';
                 arButtonElement.innerHTML = '<i class="ph ph-bounding-box text-sm"></i> VER EN PARED (AR)';
@@ -491,7 +483,7 @@
                     painting.userData.originalScale = painting.scale.clone();
                     painting.userData.originalQuat = painting.quaternion.clone();
                     
-                    painting.scale.set(0.1, 0.1, 0.1); // Escala para mundo real
+                    painting.scale.set(0.1, 0.1, 0.1); 
                     painting.visible = true;
                     isARPlaced = false;
                     
@@ -570,12 +562,13 @@
 
             textureLoader.load(imageUrl, async function(texture) {
                 texture.encoding = THREE.sRGBEncoding;
-                // Anisotropía para alta calidad visual en ángulos
                 texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
                 
                 paintMaterial.map = texture;
                 paintMaterial.bumpMap = texture;
-                paintMaterial.bumpScale = 0.08; // Aumentado ligeramente para mayor percepción de volumen
+                
+                // 1. AUMENTO DRÁSTICO DEL RELIEVE PARA WEBGL
+                paintMaterial.bumpScale = 0.18; 
                 paintMaterial.needsUpdate = true;
 
                 if (isIOS && arButtonElement) {
@@ -586,9 +579,15 @@
                         arTexture.flipY = true; 
                         arTexture.needsUpdate = true;
 
+                        // 2. FIX EFECTO PLÁSTICO EN iOS: roughness a 0.95 y metalness a 0.0
                         const arCanvas = new THREE.Mesh(
                             new THREE.BoxGeometry(0.56, 0.85, 0.005),
-                            new THREE.MeshStandardMaterial({ color: 0xffffff, map: arTexture, roughness: 0.5 })
+                            new THREE.MeshStandardMaterial({ 
+                                color: 0xffffff, 
+                                map: arTexture, 
+                                roughness: 0.95, 
+                                metalness: 0.0 
+                            })
                         );
                         arGroup.add(arCanvas);
 
@@ -674,7 +673,6 @@
 
         function animate3D() {
             renderer.setAnimationLoop(() => {
-                // LÓGICA DE ORTOGONALIDAD ESTRICTA PARA ANDROID
                 if(renderer.xr.isPresenting) {
                     if (!isARPlaced) {
                         const cameraPos = new THREE.Vector3();
