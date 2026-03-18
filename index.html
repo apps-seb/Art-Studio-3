@@ -236,7 +236,7 @@
                 image: "IMG_6415.jpeg", 
                 historyTitle: 'De la Tierra<br><span class="italic text-champagne">al Cielo</span>',
                 historyText: `
-                    <p>Esta pieza se erige de forma vertical, marcando una ruptura consciente con los paisajes horizontales del pasado. Creada por un colectivo de firmantes de paz, la orientación misma de la obra es una declaración: representa al individuo poniéndose de pie, creciendo desde las raíces de su historia hacia nuevas alturas.</p>
+                    <p>Esta pieza se erige de forma vertical, marcando una ruptura consciente con los paisajes horizontales del pasado. Creada por un colectivo de firmantes de paz, la orientation misma de la obra es una declaración: representa al individuo poniéndose de pie, creciendo desde las raíces de su historia hacia nuevas alturas.</p>
                     <p>El lienzo utilizado fue recuperado de dotaciones de antiguos campamentos. Ahora, estirado hacia arriba, sostiene una amalgama de pigmentos naturales extraídos de las montañas del Cauca.</p>
                     <p><span class="text-champagne italic">"Cuando decidimos pintar en este formato, entendimos que queríamos reflejar la dignidad de quien se levanta tras la tormenta. No estamos escondidos a ras de suelo; estamos de pie, construyendo."</span></p>
                     <p>Las texturas verticales que recorren la pintura emulan las cortezas de los árboles del macizo colombiano, recordando que la verdadera resiliencia no ignora las cicatrices, sino que las convierte en la estructura fuerte que sostiene un futuro en paz.</p>
@@ -483,7 +483,7 @@
                     painting.userData.originalScale = painting.scale.clone();
                     painting.userData.originalQuat = painting.quaternion.clone();
                     
-                    painting.scale.set(0.1, 0.1, 0.1); 
+                    painting.scale.set(0.12, 0.12, 0.12); 
                     painting.visible = true;
                     isARPlaced = false;
                     
@@ -683,10 +683,19 @@
                         cameraDir.y = 0; 
                         cameraDir.normalize();
 
-                        painting.position.copy(cameraPos).add(cameraDir.multiplyScalar(1.5));
-                        painting.position.y = cameraPos.y; 
+                        // Posición destino a 1.5 metros exactos
+                        const targetPos = cameraPos.clone().add(cameraDir.multiplyScalar(1.5));
+                        
+                        // Interpolación suave para una ubicación elegante y sin saltos
+                        painting.position.lerp(targetPos, 0.1);
+                        painting.position.y = THREE.MathUtils.lerp(painting.position.y, cameraPos.y, 0.1); 
 
-                        painting.lookAt(cameraPos.x, painting.position.y, cameraPos.z);
+                        // Garantizar que la vista sea perfectamente frontal (lookAt matemático suave)
+                        const targetTarget = new THREE.Vector3(cameraPos.x, painting.position.y, cameraPos.z);
+                        const lookAtMatrix = new THREE.Matrix4().lookAt(painting.position, targetTarget, new THREE.Vector3(0, 1, 0));
+                        const targetRotation = new THREE.Quaternion().setFromRotationMatrix(lookAtMatrix);
+                        
+                        painting.quaternion.slerp(targetRotation, 0.1);
                     }
                 } else {
                     controls.update(); 
