@@ -399,16 +399,26 @@
             controls.autoRotate = true; 
             controls.autoRotateSpeed = 1.5;
 
-            // ILUMINACIÓN ROBUSTA (Evita texturas grises en Android)
-            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.8));
-            const globalAmbientLight = new THREE.AmbientLight(0xffffff, 1.2); 
+            // ILUMINACIÓN ESTILO GALERÍA DE ARTE
+            // Luz de ambiente baja para generar contraste dramático
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x111111, 0.3));
+            const globalAmbientLight = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(globalAmbientLight);
             
-            const spotlight = new THREE.SpotLight(0xfff5e6, 1.5);
-            spotlight.position.set(3, 4, 6);
-            spotlight.angle = Math.PI / 4;
-            spotlight.penumbra = 0.4;
-            camera.add(spotlight); // La luz sigue a la cámara
+            // Foco de galería dramático (sigue a la cámara y apunta a la obra)
+            const mainSpotlight = new THREE.SpotLight(0xfff5e6, 3.5); // Luz más cálida y potente
+            mainSpotlight.position.set(4, 5, 8); // Posición oblicua y alta
+            mainSpotlight.angle = Math.PI / 5;
+            mainSpotlight.penumbra = 0.6; // Bordes muy suaves
+            mainSpotlight.decay = 1.5;
+            mainSpotlight.distance = 50;
+            camera.add(mainSpotlight);
+
+            // Luz direccional lateral para revelar fuertemente la textura (bump)
+            const sideTextureLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+            sideTextureLight.position.set(-5, 2, 3); // Incidencia muy lateral
+            camera.add(sideTextureLight);
+
             scene.add(camera);
 
             painting = new THREE.Group();
@@ -416,7 +426,10 @@
             scene.add(painting);
 
             paintMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0xffffff, roughness: 0.4, metalness: 0.05 
+                color: 0xffffff,
+                roughness: 0.75, // Lienzo mate, refleja luz difusamente pero no como plástico
+                metalness: 0.0, // El lienzo/pintura no es metálico
+                bumpScale: 0.1 // Este valor será re-asignado luego, pero por si acaso
             });
             const sideMaterial = new THREE.MeshStandardMaterial({ 
                 color: 0x000000, roughness: 0.85, metalness: 0.1 
@@ -552,9 +565,14 @@
 
             textureLoader.load(imageUrl, async function(texture) {
                 texture.encoding = THREE.sRGBEncoding;
+                // Anisotropy máxima para que la textura se vea nítida en ángulos laterales extremos
+                texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                texture.minFilter = THREE.LinearMipmapLinearFilter;
+
                 paintMaterial.map = texture;
                 paintMaterial.bumpMap = texture;
-                paintMaterial.bumpScale = 0.05;
+                // Aumentar un poco más la altura del relieve para pinceladas más gruesas e impresionistas
+                paintMaterial.bumpScale = 0.12;
                 paintMaterial.needsUpdate = true;
 
                 if (isIOS && arButtonElement) {
